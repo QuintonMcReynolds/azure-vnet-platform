@@ -1,0 +1,22 @@
+# Local development: the API plus a Postgres database, mirroring the Azure setup.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: notes
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: notes
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notes"]
+      interval: 5s
+      retries: 10
+  api:
+    build: ./app
+    environment:
+      DATABASE_URL: postgresql+psycopg://notes:localdev@db:5432/notes
+      DEPLOY_ENV: local
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy

@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "infra/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to deploy"
+        type: choice
+        options: [dev, contoso]
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}  # add required reviewers on "contoso" in GitHub settings
+    env:
+      TARGET: ${{ inputs.environment || 'dev' }}
+      TAG: ${{ github.sha }}
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC, no stored passwords)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TFSTATE_STORAGE }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${TARGET}.tfstate"
+
+      - name: "Pass 1: network, registry, database, secrets"
+        run: terraform apply -auto-approve -input=false -var-file="environments/${TARGET}.tfvars" -var deploy_app=false
+
+      - name: Build and push image with ACR Tasks
+        run: |
+          ACR="$(terraform output -raw acr_name)"
+          az acr build -r "$ACR" -t "notes-api:${TAG}" --build-arg APP_VERSION="${TAG}" ../app
+
+      - name: "Pass 2: deploy the app"
+        run: terraform apply -auto-approve -input=false -var-file="environments/${TARGET}.tfvars" -var deploy_app=true -var image_tag="${TAG}"
+
+      - name: Smoke test
+        run: |
+          ../scripts/smoke-test.sh \
+            "$(terraform output -raw resource_group)" \
+            "$(terraform output -raw container_app_name)" \
+            "$(terraform output -raw app_url)" \
+            "$(terraform output -raw internal_only)" \
+            "${TAG}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deployment: ${TARGET}"
+            echo "- Image: notes-api:${TAG}"
+            echo "- URL: $(terraform output -raw app_url 2>/dev/null || echo n/a)"
+            echo "- Internal only: $(terraform output -raw internal_only 2>/dev/null || echo n/a)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,6 @@
+# scripts/bootstrap.sh prints these values. The pipeline builds this file from GitHub secrets.
+# Copy to <env>.backend.hcl for local use (those files are git-ignored).
+resource_group_name  = "rg-notes-tfstate"
+storage_account_name = "stnotestfstateXXXXX"
+container_name       = "tfstate"
+key                  = "dev.tfstate"

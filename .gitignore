@@ -1,0 +1,12 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+plan.txt
+infra/environments/*.backend.hcl
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.db
+.venv/
+.env
