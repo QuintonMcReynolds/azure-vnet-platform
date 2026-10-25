@@ -1,9 +1,7 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-    paths: ["app/**", "infra/**", ".github/workflows/deploy.yml"]
+  # Manual only: run after scripts/bootstrap.sh has set the Azure secrets.
   workflow_dispatch:
     inputs:
       environment:

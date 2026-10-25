@@ -52,7 +52,8 @@ jobs:
 
   plan:
     name: Terraform plan (dev)
-    if: github.event_name == 'pull_request'
+    # Needs Azure: set the repo variable AZURE_ENABLED=true after running scripts/bootstrap.sh.
+    if: github.event_name == 'pull_request' && vars.AZURE_ENABLED == 'true'
     needs: [app, terraform]
     runs-on: ubuntu-latest
     env:

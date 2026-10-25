@@ -94,7 +94,7 @@ company.
 
 ### 5. Deploy
 
-Push to `main` (or run **Actions > Deploy > Run workflow > dev**). The pipeline:
+Run **Actions > Deploy > Run workflow > dev** (deploys are manual, so the repo works without Azure). The pipeline:
 
 1. creates the network, registry, database and secrets
 2. builds the image in Azure Container Registry
